@@ -1,0 +1,119 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <net.uaznia.lukanus.hudson.plugins.gitparameter.GitParameterDefinition plugin="git-parameter@0.8.0">
+          <name>version</name>
+          <description></description>
+          <uuid>7d23eb43-21e5-4d79-b86c-7417a8ad2658</uuid>
+          <type>PT_BRANCH_TAG</type>
+          <branch></branch>
+          <tagFilter>*</tagFilter>
+          <branchFilter>.*</branchFilter>
+          <sortMode>DESCENDING_SMART</sortMode>
+          <defaultValue>origin/master</defaultValue>
+          <selectedValue>DEFAULT</selectedValue>
+          <useRepository>http://localhost:8681/r/fcn1-gestion-commande.git</useRepository>
+          <quickFilterEnabled>false</quickFilterEnabled>
+        </net.uaznia.lukanus.hudson.plugins.gitparameter.GitParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>m2repo</name>
+          <description></description>
+          <choices class="java.util.Arrays$ArrayList">
+            <a class="string-array">
+              <string>http://admin:admin123@172.17.0.1:8081/nexus/content/repositories</string>
+              <string>file:///home/workdrive/TAZONE/WORKSPACES/git-m2-repo</string>
+            </a>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@3.1.0">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>http://localhost:8681/r/fcn1-gestion-commande.git</url>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>${version}</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <submoduleCfg class="list"/>
+    <extensions/>
+  </scm>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>echo -n  &quot;MVN_PROJECT_VERSION=&quot;&gt;version.prop
+mvn -q -Dexec.executable=&quot;echo&quot; -Dexec.args=&apos;${project.version}&apos; --non-recursive org.codehaus.mojo:exec-maven-plugin:1.3.1:exec&gt;&gt;version.prop</command>
+    </hudson.tasks.Shell>
+    <EnvInjectBuilder plugin="envinject@1.93.1">
+      <info>
+        <propertiesFilePath>version.prop</propertiesFilePath>
+      </info>
+    </EnvInjectBuilder>
+    <org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBuilder plugin="conditional-buildstep@1.3.5">
+      <condition class="org.jenkins_ci.plugins.run_condition.core.ExpressionCondition" plugin="run-condition@1.0">
+        <expression>.*SNAPSHOT.*</expression>
+        <label> ${ENV,var=&quot;MVN_PROJECT_VERSION&quot;}</label>
+      </condition>
+      <buildStep class="hudson.tasks.Maven">
+        <targets>deploy -DaltDeploymentRepository=releaseRepository::default::${m2repo}/snapshots/</targets>
+        <usePrivateRepository>false</usePrivateRepository>
+        <settings class="jenkins.mvn.DefaultSettingsProvider"/>
+        <globalSettings class="jenkins.mvn.DefaultGlobalSettingsProvider"/>
+        <injectBuildVariables>false</injectBuildVariables>
+      </buildStep>
+      <runner class="org.jenkins_ci.plugins.run_condition.BuildStepRunner$Fail" plugin="run-condition@1.0"/>
+    </org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBuilder>
+    <org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBuilder plugin="conditional-buildstep@1.3.5">
+      <condition class="org.jenkins_ci.plugins.run_condition.logic.Not" plugin="run-condition@1.0">
+        <condition class="org.jenkins_ci.plugins.run_condition.core.ExpressionCondition">
+          <expression>.*SNAPSHOT.*</expression>
+          <label> ${ENV,var=&quot;MVN_PROJECT_VERSION&quot;}</label>
+        </condition>
+      </condition>
+      <buildStep class="hudson.tasks.Maven">
+        <targets>deploy -DaltDeploymentRepository=releaseRepository::default::${m2repo}/releases/</targets>
+        <usePrivateRepository>false</usePrivateRepository>
+        <settings class="jenkins.mvn.DefaultSettingsProvider"/>
+        <globalSettings class="jenkins.mvn.DefaultGlobalSettingsProvider"/>
+        <injectBuildVariables>false</injectBuildVariables>
+      </buildStep>
+      <runner class="org.jenkins_ci.plugins.run_condition.BuildStepRunner$Fail" plugin="run-condition@1.0"/>
+    </org.jenkinsci.plugins.conditionalbuildstep.singlestep.SingleConditionalBuilder>
+    <org.jvnet.hudson.plugins.SSHBuilder plugin="ssh@2.4">
+      <siteName>admin@localhost:8101</siteName>
+      <command>uninstall fcn1-gestion-commande
+install -s mvn:lab/fcn1-gestion-commande/${MVN_PROJECT_VERSION}</command>
+    </org.jvnet.hudson.plugins.SSHBuilder>
+  </builders>
+  <publishers>
+    <hudson.tasks.junit.JUnitResultArchiver plugin="junit@1.23">
+      <testResults>target/surefire-reports/*.xml</testResults>
+      <keepLongStdio>false</keepLongStdio>
+      <healthScaleFactor>1.0</healthScaleFactor>
+      <allowEmptyResults>false</allowEmptyResults>
+    </hudson.tasks.junit.JUnitResultArchiver>
+  </publishers>
+  <buildWrappers>
+    <hudson.plugins.ws__cleanup.PreBuildCleanup plugin="ws-cleanup@0.32">
+      <deleteDirs>false</deleteDirs>
+      <cleanupParameter></cleanupParameter>
+      <externalDelete></externalDelete>
+    </hudson.plugins.ws__cleanup.PreBuildCleanup>
+  </buildWrappers>
+</project>
